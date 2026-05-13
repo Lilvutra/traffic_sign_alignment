@@ -191,7 +191,9 @@ for file_name in image_files:
     blue_mask, red_mask = hsv_filter(roi)
 
     # ------------------------------------------------
-    # STEP 3 — MORPHOLOGY
+    # STEP 3 — MORPHOLOGY means we will have two separate masks:
+    # one for blue and one for red.
+    # 
     # Process each color separately
     # ------------------------------------------------
 
