@@ -927,6 +927,79 @@ def semantic_contour_detection(mask, roi_image):
             3
 
         )
+    
+        # -----------------------------------------------------
+        # STEP 5A — EXTRACT TRAFFIC SIGN ROI
+        # -----------------------------------------------------
+
+        # bounding box for contour
+        x, y, w, h = cv2.boundingRect(cnt)
+
+        # small padding around sign
+        padding = 8
+
+        x1 = max(x - padding, 0)
+        y1 = max(y - padding, 0)
+
+        x2 = min(x + w + padding, roi_w)
+        y2 = min(y + h + padding, roi_h)
+
+        # extract sign region
+        sign_roi = roi_image[y1:y2, x1:x2]
+
+        # skip invalid crops
+        if sign_roi.size == 0:
+            continue
+
+        # -----------------------------------------------------
+        # OPTIONAL — Resize extracted sign
+        # Useful for classifier input later
+        # -----------------------------------------------------
+
+        extracted_sign = cv2.resize(
+            sign_roi,
+            (128, 128)
+        )
+
+        # -----------------------------------------------------
+        # SAVE EXTRACTED SIGN
+        # -----------------------------------------------------
+
+        os.makedirs(
+            'output_images/extracted_signs',
+            exist_ok=True
+        )
+
+        sign_path = (
+            f'output_images/extracted_signs/'
+            f'sign_{detected}.png'
+        )
+
+        cv2.imwrite(
+            sign_path,
+            extracted_sign
+        )
+
+        # -----------------------------------------------------
+        # VISUALIZE EXTRACTED SIGN
+        # -----------------------------------------------------
+
+        plt.figure(figsize=(4,4))
+
+        plt.imshow(
+            cv2.cvtColor(
+                extracted_sign,
+                cv2.COLOR_BGR2RGB
+            )
+        )
+
+        plt.title(
+            f'Extracted Traffic Sign #{detected}'
+        )
+
+        plt.axis('off')
+
+        plt.show()
 
     return output, detected
 
@@ -1065,7 +1138,7 @@ def main():
 
         print(f"Processed: {file_name}")
 
-
+   
 if __name__ == '__main__':
 
     main()
