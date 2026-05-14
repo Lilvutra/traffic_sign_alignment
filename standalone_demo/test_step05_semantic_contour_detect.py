@@ -276,11 +276,11 @@ def semantic_contour_detection(mask, roi_image):
         detected_contours (list): List of contours that are mostlikely to be traffic signs after semantic analysis
     """
     # ADD erosion to separate connected signs, this can help to improve the contour extraction step by breaking apart signs that may be touching or very close to each other in the mask. By applying erosion before contour extraction, we can create a small gap between connected signs, which allows the contour extraction algorithm to identify them as separate contours. This can lead to more accurate detection of individual signs in cases where they are clustered together in the image.
-    kernel = cv2.getStructuringElement(
-      cv2.MORPH_ELLIPSE,
-      (1, 1)
-    )
-    mask = cv2.erode(mask, kernel, iterations=1) # apply erosion to the mask to separate connected signs before contour extraction
+    #kernel = cv2.getStructuringElement(
+    #  cv2.MORPH_ELLIPSE,
+    #  (3, 3)
+    #)
+    #mask = cv2.erode(mask, kernel, iterations=1) # apply erosion to the mask to separate connected signs before contour extraction
 
    
 
@@ -531,7 +531,7 @@ def semantic_contour_detection(mask, roi_image):
     #
     # Then contours in the same cluster
     # are merged into a single contour candidate.
-    
+   
     def _merge_contours(contours, image):
           
         # AREA
@@ -747,12 +747,17 @@ def semantic_contour_detection(mask, roi_image):
     # =========================================================
     # Merge Fragmented Contours
     # =========================================================
-
+    
+    #print number of contours before merging, this can help us to understand how many fragmented contours we are starting with before applying the merging process. By printing the number of contours before merging, we can get a sense of the level of fragmentation in the contour extraction step and how much improvement we might expect from the merging process in the semantic contour detection step.
+    print(f"Number of contours before merging: {len(contours)}")
+    
     contours = _merge_contours(
         contours,
         roi_image
     )
     
+    # print number of contours after merging, this can help us to understand how many potential sign contours we are analyzing in the semantic contour detection step after combining fragmented contours together. By printing the number of contours after merging, we can get a sense of how effective the merging process is at reducing fragmentation and creating more complete contours for analysis in the next step.
+    print(f"Number of contours after merging: {len(contours)}")
     
     
     # =========================================================
@@ -768,6 +773,17 @@ def semantic_contour_detection(mask, roi_image):
         cv2.drawContours(output, [cnt], -1, (255, 0, 0), 2) # draw the combined contours on the output image in blue color with a thickness of 2 pixels for visualization purposes. This allows us to see the results of the contour merging process and verify that we are creating more complete contours for the signs before applying the semantic checks in the next step.
         
     for cnt in contours:
+        # plot contour to verify its existence
+        canvas = output.copy()
+
+        cv2.drawContours(canvas, [cnt], -1, (0,255,0), 2)
+
+        plt.imshow(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+        plt.title("Check existence")
+        plt.axis('off')
+        plt.show()
+        
+        # the 2 circles exist here => they be filtered in later steps 
         # -----------------------------------------------------
         # Basic geometry
         # -----------------------------------------------------
@@ -803,15 +819,20 @@ def semantic_contour_detection(mask, roi_image):
         center_x = x + w // 2 # tính tọa độ x trung tâm
         center_y = y + h // 2 # toa do y trung tam 
         
-        if center_y > roi_h * 0.85 or center_y < roi_h * 0.03: # signs thường không nằm sát đáy ảnh và cũng không nằm quá cao
+        #0.85, 0.03
+        if center_y > roi_h * 0.95 or center_y < roi_h * 0.01: # signs thường không nằm sát đáy ảnh và cũng không nằm quá cao
             continue
-
-        if center_x < roi_w * 0.4 or center_x > roi_w * 0.9: # signs thường không nằm sát bên trái và cũng không nằm sát bên phải, nhu
-            continue       
+        
+        #0.3, 0.9 can discard blobs on the road on 1st image but 0.2, 0.9 cannot and filter 1 contour in 2nd image(rm:2)
+        #0.2 and 0.9 probably filter out the 2circle sign in 2nd image(YESS)
+        #if center_x < roi_w * 0.15 or center_x > roi_w * 0.9: # signs thường không nằm sát bên trái và cũng không nằm sát bên phải
+        #   continue       
        
         # -----------------------------------------------------
         # Shape features
         # ----------------------------------------------------- 
+        # print area, aspect ratio, fill ratio, solidity, color ratio for debugging
+        print(f"Contour area: {area}, aspect ratio: {aspect_ratio:.2f}, fill ratio: {fill_ratio:.2f}, solidity: {solidity:.2f}, color ratio: {color_ratio:.2f}")
         
         perimeter = cv2.arcLength(cnt, True) # chu vi contour
         
@@ -849,7 +870,7 @@ def semantic_contour_detection(mask, roi_image):
         # Shape semantic reasoning
         # -----------------------------------------------------
         shape_ok = False
-        
+        print(f"perimeter: {perimeter}, circularity: {circularity:.2f}, vertices:{vertices}")
         # triangle sign
         if vertices == 3:
             shape_ok = (0.3 <= aspect_ratio <= 1.6 and 
@@ -860,17 +881,17 @@ def semantic_contour_detection(mask, roi_image):
                         0.3 <= aspect_ratio <= 3.2)
             
         # circular sign
-        elif 3 <= vertices <= 10:
-            shape_ok = (circularity > 0.38 and 
+        elif vertices >= 10:
+            shape_ok = (circularity >= 0.28 and 
                         fill_ratio > 0.22
             ) or vertices == 8
         
-        elif circularity > 0.7:
+        elif circularity > 0.5 and fill_ratio > 0.25:
             shape_ok = True
 
         if not shape_ok:
             continue
-        
+        print(f"shape ok: {shape_ok}")
         # -----------------------------------------------------
         # Detection accepted
         # -----------------------------------------------------
